@@ -1,1 +1,1 @@
-web: teamguru-app
+web: teamguru
