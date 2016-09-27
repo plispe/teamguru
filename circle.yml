@@ -1,0 +1,66 @@
+machine:
+  services:
+    - docker
+  environment:
+    GOPATH: /home/ubuntu/.go_workspace
+    IMPORT_PATH: github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
+
+general:
+  # Set build dir
+  build_dir: ../.go_workspace/src/$IMPORT_PATH
+
+checkout:
+  post:
+    # Create application dir in gopath
+    - mkdir -p "$GOPATH/src/$IMPORT_PATH"
+    # Sync sourcecodes into gopath
+    - rsync -az --delete $HOME/$CIRCLE_PROJECT_REPONAME/ $GOPATH/src/$IMPORT_PATH/
+
+dependencies:
+    pre:
+        # Install deis CLI
+        - curl -sSL http://deis.io/deis-cli/install-v2.sh | bash && sudo mv $PWD/deis /usr/local/bin/deis
+        # Install govendor
+        - go get -u github.com/kardianos/govendor
+    override:
+        # Install dependencies
+        - govendor sync
+test:
+  override:
+     # Run go tests
+     - go test -v -race ./...
+
+
+deployment:
+  production:
+    branch: master
+    commands:
+      # Build artifact
+      - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o .docker/artifact .
+      # Login to docker
+      - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD -e $DOCKER_EMAIL
+      # Build docker image
+      - docker build -t $DOCKER_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_BUILD_NUM .docker
+      # Push builded image into docker repository
+      - docker push $DOCKER_USERNAME/$CIRCLE_PROJECT_REPONAME
+      # Login to deis cluster
+      - deis login $DEIS_URL --username=$DEIS_LOGIN --password=$DEIS_PASSWORD
+      # Pull docker image from registry
+      - deis pull $DOCKER_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_BUILD_NUM -a $CIRCLE_PROJECT_REPONAME
+  development:
+    branch: dev-master
+    commands:
+         # Create key pair for deploy
+         - ssh-keygen -t rsa -N "" -f ~/.ssh/deis
+         # Set key for deis host
+         - printf "Host deis-builder.146.148.123.11.xip.io\nIdentityFile ~/.ssh/deis\n" >> ~/.ssh/config
+         # Login into deis cluster
+         - deis login $DEIS_URL --username=$DEIS_LOGIN --password=$DEIS_PASSWORD
+         # Add git remote
+         - deis git:remote -a $CIRCLE_PROJECT_REPONAME-dev
+         # Add key to deis account
+         - deis keys:add ~/.ssh/deis.pub
+         # Push new code to deis app
+         - git push deis dev-master
+         # Remmote deployment key
+         - deis keys:remove $(cat ~/.ssh/deis.pub | tr ' ' $'\n' | tail -n 1)

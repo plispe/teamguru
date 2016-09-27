@@ -1,0 +1,6 @@
+# Hidden files
+.env
+
+# Files and folder
+teamguru
+vendor/*/
