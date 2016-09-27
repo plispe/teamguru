@@ -12,7 +12,7 @@ func healthcheckHandler(w http.ResponseWriter, req *http.Request) {
 
 func versionHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "1.0.0")
+	fmt.Fprint(w, "2.0.1")
 }
 
 func mainHandler(w http.ResponseWriter, req *http.Request) {
